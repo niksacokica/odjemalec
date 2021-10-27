@@ -34,7 +34,8 @@ namespace odjemalec{
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.horizontal_split.IsSplitterFixed = true;
-            this.horizontal_split.Location = new System.Drawing.Point(12, 12);
+            this.horizontal_split.Location = new System.Drawing.Point(9, 10);
+            this.horizontal_split.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.horizontal_split.Name = "horizontal_split";
             this.horizontal_split.Orientation = System.Windows.Forms.Orientation.Horizontal;
             // 
@@ -48,16 +49,18 @@ namespace odjemalec{
             this.horizontal_split.Panel2.Controls.Add(this.log_lab);
             this.horizontal_split.Panel2.Controls.Add(this.log);
             this.horizontal_split.Panel2.Controls.Add(this.chat);
-            this.horizontal_split.Size = new System.Drawing.Size(982, 697);
-            this.horizontal_split.SplitterDistance = 150;
+            this.horizontal_split.Size = new System.Drawing.Size(736, 566);
+            this.horizontal_split.SplitterDistance = 121;
+            this.horizontal_split.SplitterWidth = 3;
             this.horizontal_split.TabIndex = 1;
             // 
             // stats_lab
             // 
             this.stats_lab.AutoSize = true;
             this.stats_lab.Location = new System.Drawing.Point(0, 0);
+            this.stats_lab.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.stats_lab.Name = "stats_lab";
-            this.stats_lab.Size = new System.Drawing.Size(53, 17);
+            this.stats_lab.Size = new System.Drawing.Size(42, 13);
             this.stats_lab.TabIndex = 1;
             this.stats_lab.Text = "STATS";
             // 
@@ -67,12 +70,13 @@ namespace odjemalec{
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.stats.Enabled = false;
-            this.stats.Location = new System.Drawing.Point(3, 3);
+            this.stats.Location = new System.Drawing.Point(2, 2);
+            this.stats.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.stats.Multiline = true;
             this.stats.Name = "stats";
             this.stats.ReadOnly = true;
             this.stats.ShortcutsEnabled = false;
-            this.stats.Size = new System.Drawing.Size(976, 144);
+            this.stats.Size = new System.Drawing.Size(733, 117);
             this.stats.TabIndex = 0;
             this.stats.TabStop = false;
             // 
@@ -80,8 +84,9 @@ namespace odjemalec{
             // 
             this.log_lab.AutoSize = true;
             this.log_lab.Location = new System.Drawing.Point(0, 0);
+            this.log_lab.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.log_lab.Name = "log_lab";
-            this.log_lab.Size = new System.Drawing.Size(38, 17);
+            this.log_lab.Size = new System.Drawing.Size(29, 13);
             this.log_lab.TabIndex = 2;
             this.log_lab.Text = "LOG";
             // 
@@ -91,11 +96,14 @@ namespace odjemalec{
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.log.CausesValidation = false;
-            this.log.Location = new System.Drawing.Point(4, 4);
+            this.log.Font = new System.Drawing.Font("Courier New", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(238)));
+            this.log.Location = new System.Drawing.Point(3, 3);
+            this.log.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.log.Multiline = true;
             this.log.Name = "log";
             this.log.ReadOnly = true;
-            this.log.Size = new System.Drawing.Size(975, 508);
+            this.log.ScrollBars = System.Windows.Forms.ScrollBars.Both;
+            this.log.Size = new System.Drawing.Size(732, 415);
             this.log.TabIndex = 1;
             this.log.TabStop = false;
             this.log.TextAlign = System.Windows.Forms.HorizontalAlignment.Right;
@@ -104,19 +112,21 @@ namespace odjemalec{
             // 
             this.chat.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.chat.Location = new System.Drawing.Point(4, 518);
+            this.chat.Location = new System.Drawing.Point(3, 422);
+            this.chat.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.chat.Name = "chat";
-            this.chat.Size = new System.Drawing.Size(975, 22);
+            this.chat.Size = new System.Drawing.Size(732, 20);
             this.chat.TabIndex = 0;
             this.chat.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.chat_KeyPress);
             // 
             // odjemalec
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1006, 721);
+            this.ClientSize = new System.Drawing.Size(754, 586);
             this.Controls.Add(this.horizontal_split);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.Name = "odjemalec";
             this.Text = "Odjemalec";
             this.horizontal_split.Panel1.ResumeLayout(false);
