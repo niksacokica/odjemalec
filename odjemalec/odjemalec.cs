@@ -12,7 +12,7 @@ namespace odjemalec{
         private TcpClient client;
         delegate void SetTextCallback(TextBox type, string text);
 
-        private static int pad = 25;
+        string info = "[INFO]\r\n";
 
         public odjemalec(){
             InitializeComponent();
@@ -33,13 +33,15 @@ namespace odjemalec{
                     string read = Encoding.UTF8.GetString( buffer, 0, ns.Read( buffer, 0, buffer.Length ) );
 
                     Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( read );
+                    setText(log, read);
+                    setText(log, msg.ToString() );
 
-                    if (!string.IsNullOrEmpty(read))
-                        if( msg["command"].Equals( "m" ) )
-                            handleMessage(msg);
-                        else
-                            handleCommand( msg );
-                }catch{}
+                    string toLog = msg["command"].Equals("m") ? msg["message"] : handleCommand(msg);
+                    if ( !string.IsNullOrEmpty( toLog ) )
+                        setText( log, "[" + msg["sender"] + "]\r\n" + toLog );
+                }catch(Exception e){
+                    setText(log, e.ToString() );
+                }
             }
         }
 
@@ -50,12 +52,19 @@ namespace odjemalec{
             ns.Write( send, 0, send.Length );
         }
 
-        private void handleCommand( Dictionary<string, string> cmd ){
+        private string handleCommand( Dictionary<string, string> cmd ){
+            string note = "";
 
-        }
+            switch( cmd["message"] ){
+                case "disconnect":
+                    client.GetStream().Close();
+                    client.Close();
 
-        private void handleMessage( Dictionary<string, string> msg ){
+                    note = "You have been disconnected by the SERVER!\r\n\r\n" + info + "Disconnected from the server.";
+                    break;
+            }
 
+            return cmd["command"].Equals("c") ? note : "" ;
         }
 
         //tukaj dobimo text z chat boxa kdaj uporabnik pritisne enter
@@ -81,7 +90,6 @@ namespace odjemalec{
             string[] cmd = txt.Split( ' ' );
             string alert = "[ALERT]\r\n";
             string error = "[ERROR]\r\n";
-            string info = "[INFO]\r\n";
 
             switch( cmd[0] ){
                 case "connect":
