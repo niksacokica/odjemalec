@@ -10,19 +10,28 @@ using System.Windows.Forms;
 namespace odjemalec{
     public partial class odjemalec : Form{
         private TcpClient client;
-        delegate void SetTextCallback(TextBox type, string text);
+        delegate void SetTextCallback( TextBox type, string text );
+        private string server = "";
 
-        string info = "[INFO]\r\n";
+        private string info = "[INFO]\r\n";
+        private string alert = "[ALERT]\r\n";
 
         public odjemalec(){
             InitializeComponent();
         }
 
-        private void setText( TextBox type, string txt ){
-            if ( type.InvokeRequired )
-                this.Invoke(new SetTextCallback( setText ), new object[] { type, txt });
+        private void appendText( TextBox type, string txt ){
+            if( type.InvokeRequired )
+                this.Invoke( new SetTextCallback( appendText ), new object[] { type, txt } );
             else
-                type.AppendText( txt + "\r\n\r\n" );
+                type.AppendText (txt + ( type.Name.Equals( "log" ) ? "\r\n\r\n" : "\r\n" ) );
+        }
+
+        private void setText( TextBox type, string txt ){
+            if (type.InvokeRequired)
+                this.Invoke( new SetTextCallback( setText ), new object[] { type, txt } );
+            else
+               type.Text = txt;
         }
 
         private async void receive(){
@@ -32,39 +41,54 @@ namespace odjemalec{
                     byte[] buffer = new byte[1024];
                     string read = Encoding.UTF8.GetString( buffer, 0, ns.Read( buffer, 0, buffer.Length ) );
 
-                    Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( read );
-                    setText(log, read);
-                    setText(log, msg.ToString() );
+                    Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read );
 
-                    string toLog = msg["command"].Equals("m") ? msg["message"] : handleCommand(msg);
+                    string toLog = msg["type"].Equals( "m" ) ? "[" + msg["sender"] + "]\r\n" + msg["message"] : handleCommand( msg );
                     if ( !string.IsNullOrEmpty( toLog ) )
-                        setText( log, "[" + msg["sender"] + "]\r\n" + toLog );
-                }catch(Exception e){
-                    setText(log, e.ToString() );
+                        appendText( log, toLog );
+                }catch{
+                    appendText( log, alert + "Server went offline!" );
                 }
             }
         }
 
-        private void sendMessage( string msg ){
+        private void sendMessage( string recepient, string cmd, string type, string msg ){
             NetworkStream ns = client.GetStream();
 
-            byte[] send = Encoding.UTF8.GetBytes( msg.ToCharArray(), 0, msg.Length );
+            Dictionary<string, string> forJson = new Dictionary<string, string>(){
+                { "recepient", recepient },
+                { "command", cmd },
+                { "type", type },
+                { "message", msg }
+            };
+
+            string json = JsonConvert.SerializeObject( forJson );
+
+            byte[] send = Encoding.UTF8.GetBytes( json.ToCharArray(), 0, json.Length );
             ns.Write( send, 0, send.Length );
         }
 
         private string handleCommand( Dictionary<string, string> cmd ){
-            string note = "";
+            string c = "";
+            string sc = "";
 
-            switch( cmd["message"] ){
+            switch ( cmd["command"] ){
                 case "disconnect":
                     client.GetStream().Close();
                     client.Close();
 
-                    note = "You have been disconnected by the SERVER!\r\n\r\n" + info + "Disconnected from the server.";
+                    c = info + "You have been disconnected from the SERVER by the SERVER for: \"" + cmd["message"] + "\"!";
+                    sc = info + "Disconnected from the server.";
+                    break;
+                case "update online":
+                    setText( online, cmd["message"] );
+                    break;
+                default:
+                    sendMessage( "SERVER", "", "m", "\"" + cmd["message"] + "\" wasn't executed succesfully!" );
                     break;
             }
 
-            return cmd["command"].Equals("c") ? note : "" ;
+            return cmd["type"].Equals( "c" ) ? c : sc ;
         }
 
         //tukaj dobimo text z chat boxa kdaj uporabnik pritisne enter
@@ -88,7 +112,6 @@ namespace odjemalec{
         //tukaj se preveri ali je uporabnik vnesel pravilen ukaz, in či je nekaj z njim naredimo
         private string handleInput( string txt ){
             string[] cmd = txt.Split( ' ' );
-            string alert = "[ALERT]\r\n";
             string error = "[ERROR]\r\n";
 
             switch( cmd[0] ){
@@ -112,6 +135,8 @@ namespace odjemalec{
                     try{
                         client = new TcpClient( ip, port );
 
+                        server = ip + ":" + port.ToString();
+
                         Task.Run( async () => receive() );
                     }catch( Exception e ){
                         return error + "Somethin went wrong: " + e.Message;
@@ -119,7 +144,7 @@ namespace odjemalec{
 
                     return info + "Connected to \"" + ip + "\".";
                 case "disconnect":
-                    sendMessage( "COMMAND SERVER disconnect" );
+                    sendMessage( "SERVER", "disconnect", "c", "" );
 
                     client.GetStream().Close();
                     client.Close();
@@ -146,11 +171,21 @@ namespace odjemalec{
                     if( cmd.Length < 3 )
                         return alert + "Not enough arguments!";
 
-                    string msg = "MESSAGE" + " " + cmd[1] + " " + string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0]).ToArray() );
+                    string msg = "MESSAGE" + " " + cmd[1] + " " + string.Join(" ", cmd.Where(w => w != cmd[1] && w != cmd[0]).ToArray());
+                    string[] tmp = online.Text.Split( '\n' );
+                    if( server.Equals( cmd[1] ) || "SERVER".Equals( cmd[1] ) ){
+                        sendMessage( cmd[1], "", "m", msg) ;
+                        return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
+                    }
 
-                    sendMessage( msg );
+                    foreach ( string s in tmp ){
+                        if( string.Equals( s.Replace( "\r", "" ), cmd[1] ) ){
+                            sendMessage( cmd[1], "", "m", msg );
+                            return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
+                        }
+                    }
 
-                    return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
+                    return alert + "Unable to find: \"" + cmd[1] + "\"!";
                 default:
                     return alert + "Unknown command: \"" + cmd[0] + "\"! Try help to get all commands.";
             }
