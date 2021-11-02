@@ -11,7 +11,6 @@ namespace odjemalec{
     public partial class odjemalec : Form{
         private TcpClient client;
         delegate void SetTextCallback( TextBox type, string text );
-        private string server = "";
 
         private string info = "[INFO]\r\n";
         private string alert = "[ALERT]\r\n";
@@ -34,20 +33,29 @@ namespace odjemalec{
                type.Text = txt;
         }
 
-        private async void receive(){
+        private void receive( NetworkStream ns ){
             while( client.Connected ){
-                try{
-                    NetworkStream ns = client.GetStream();
-                    byte[] buffer = new byte[1024];
-                    string read = Encoding.UTF8.GetString( buffer, 0, ns.Read( buffer, 0, buffer.Length ) );
+                byte[] buffer = new byte[1024];
+                string read = "";
 
+
+                try{
+                    read = Encoding.UTF8.GetString( buffer, 0, ns.Read( buffer, 0, buffer.Length ) );
+                }catch{}
+
+                if( !string.IsNullOrEmpty( read ) ){
                     Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read );
 
-                    string toLog = msg["type"].Equals( "m" ) ? "[" + msg["sender"] + "]\r\n" + msg["message"] : handleCommand( msg );
-                    if ( !string.IsNullOrEmpty( toLog ) )
+                    string toLog = "";
+                    if( msg["type"].Equals( "m" ) )
+                        toLog = "[" + msg["sender"] + "]\r\n" + msg["message"];
+                    else if( msg["type"].Equals( "ma" ) )
+                        toLog = "[" + msg["sender"] + "] -> [all]\r\n" + msg["message"];
+                    else
+                        toLog = handleCommand( msg );
+
+                    if( !string.IsNullOrEmpty( toLog ) )
                         appendText( log, toLog );
-                }catch{
-                    appendText( log, alert + "Server went offline!" );
                 }
             }
         }
@@ -81,7 +89,15 @@ namespace odjemalec{
                     sc = info + "Disconnected from the server.";
                     break;
                 case "update online":
-                    setText( online, cmd["message"] );
+                    string[] tmp = cmd["message"].Split( '\n' );
+                    foreach( string s in tmp ){
+                        if( client.Client.LocalEndPoint.ToString().Equals( s.Replace( "\r", "" ) ) ){
+                            tmp[Array.IndexOf( tmp, s )] = s + " [YOU]";
+                            break;
+                        }
+                    }
+
+                    setText( online, string.Join( "\r\n", tmp ) );
                     break;
                 default:
                     sendMessage( "SERVER", "", "m", "\"" + cmd["message"] + "\" wasn't executed succesfully!" );
@@ -135,14 +151,12 @@ namespace odjemalec{
                     try{
                         client = new TcpClient( ip, port );
 
-                        server = ip + ":" + port.ToString();
-
-                        Task.Run( async () => receive() );
+                        Task.Run( async () => receive( client.GetStream() ) );
                     }catch( Exception e ){
                         return error + "Somethin went wrong: " + e.Message;
                     }
 
-                    return info + "Connected to \"" + ip + "\".";
+                    return info + "Connected to \"" + ip + ":" + port + "\".";
                 case "disconnect":
                     sendMessage( "SERVER", "disconnect", "c", "" );
 
@@ -171,17 +185,17 @@ namespace odjemalec{
                     if( cmd.Length < 3 )
                         return alert + "Not enough arguments!";
 
-                    string msg = "MESSAGE" + " " + cmd[1] + " " + string.Join(" ", cmd.Where(w => w != cmd[1] && w != cmd[0]).ToArray());
-                    string[] tmp = online.Text.Split( '\n' );
-                    if( server.Equals( cmd[1] ) || "SERVER".Equals( cmd[1] ) ){
-                        sendMessage( cmd[1], "", "m", msg) ;
+                    string msg = string.Join(" ", cmd.Where(w => w != cmd[1] && w != cmd[0]).ToArray());
+                    if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "SERVER" ) || cmd[1].Equals( "all" ) ){
+                        sendMessage( cmd[1], "", "m", msg );
                         return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
-                    }
-
-                    foreach ( string s in tmp ){
-                        if( string.Equals( s.Replace( "\r", "" ), cmd[1] ) ){
-                            sendMessage( cmd[1], "", "m", msg );
-                            return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
+                    }else{
+                        string[] tmp = online.Text.Split( '\n' );
+                        foreach( string s in tmp ){
+                            if( cmd[1].Equals( s.Replace( "\r", "" ) ) ){
+                                sendMessage( cmd[1], "", "m", msg );
+                                return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
+                            }
                         }
                     }
 
