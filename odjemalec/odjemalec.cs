@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -51,6 +52,10 @@ namespace odjemalec{
                         toLog = "[" + msg["sender"] + "]\r\n" + msg["message"];
                     else if( msg["type"].Equals( "ma" ) )
                         toLog = "[" + msg["sender"] + "] -> [all]\r\n" + msg["message"];
+                    else if( msg["type"].Equals( "mc" ) )
+                        toLog = "[" + msg["sender"] + "]\r\n" + decrypt( msg["message"] );
+                    else if( msg["type"].Equals( "mca" ) )
+                        toLog = "[" + msg["sender"] + "] -> [all]\r\n" + decrypt( msg["message"] );
                     else
                         toLog = handleCommand( msg );
 
@@ -60,6 +65,17 @@ namespace odjemalec{
             }
         }
 
+        private string encrypt( string txt ){
+            TripleDESCryptoServiceProvider tdes = new TripleDESCryptoServiceProvider();
+            ICryptoTransform encrypt = tdes.CreateEncryptor();
+
+            return txt;
+        }
+
+        private string decrypt( string txt ){
+            return txt;
+        }
+
         private void sendMessage( string recepient, string cmd, string type, string msg ){
             NetworkStream ns = client.GetStream();
 
@@ -67,7 +83,7 @@ namespace odjemalec{
                 { "recepient", recepient },
                 { "command", cmd },
                 { "type", type },
-                { "message", msg }
+                { "message", type.Equals( "mc" ) ? encrypt( msg ) : msg }
             };
 
             string json = JsonConvert.SerializeObject( forJson );
@@ -93,7 +109,7 @@ namespace odjemalec{
                 case "update online":
                     string[] tmp = cmd["message"].Split( '\n' );
                     foreach( string s in tmp ){
-                        if( client.Client.LocalEndPoint.ToString().Equals( s.Replace( "\r", "" ) ) ){
+                        if( s.Replace( "\r", "" ).StartsWith( client.Client.LocalEndPoint.ToString() ) ){
                             tmp[Array.IndexOf( tmp, s )] = s + " [YOU]";
                             break;
                         }
@@ -102,7 +118,7 @@ namespace odjemalec{
                     setText( online, string.Join( "\r\n", tmp ) );
                     break;
                 default:
-                    sendMessage( "SERVER", "", "m", "\"" + cmd["message"] + "\" wasn't executed succesfully!" );
+                    sendMessage( "SERVER", "message", "m", "\"" + cmd["message"] + "\" wasn't executed succesfully!" );
                     break;
             }
 
@@ -134,6 +150,9 @@ namespace odjemalec{
 
             switch( cmd[0] ){
                 case "connect":
+                    if( !( client is null ) && client.Connected )
+                        return alert + "Already connected to server!";
+                    
                     if( cmd.Length < 2 )
                         return alert + "Not enough arguments!";
 
@@ -163,8 +182,6 @@ namespace odjemalec{
                     if( client is null || !client.Connected )
                         return alert + "Not connected to a server!";
 
-                    sendMessage( "SERVER", "disconnect", "c", "" );
-
                     client.GetStream().Close();
                     client.Close();
 
@@ -187,26 +204,14 @@ namespace odjemalec{
                            + "\r\ndisconnect - disconnects from a server"
                            + "\r\nexit - quit the program"
                            + "\r\nhelp - displays all commands"
-                           + "\r\nnick [name] - changes/gives you a nickname on the server for this session"
-                           + "\r\nmessage [ip:port/\"all\"/nickname] - send a message to everyone or specific ip";
-                case "nick":
-                    if( client is null || !client.Connected )
-                        return alert + "Not connected to a server!";
-
-                    if( cmd.Length < 2 )
-                        return alert + "Not enough arguments!";
-
-                    string nick = string.Join( "_", cmd.Where(w => w != cmd[0] ).ToArray() );
-                    string[] temp = online.Text.Split( '\n' );
-                    foreach( string s in temp ){
-                        string[] n = s.Split( ' ' );
-
-                        if( n.Length > 1 && n[1].StartsWith( "(" ) && n[1].Substring( 1, n[1].Length - 2 ).Equals( nick ) )
-                            return alert + "\"" + nick + "\"is taken.";
-                    }
-
-                    sendMessage( "SERVER", "", "n", nick );
-                    return info + "Set your nickname to: \"" + nick + "\".";
+                           + "\r\nmessage [ip:port/\"all\"/nickname/\"SERVER\"] - send a message to everyone or specific ip"
+                           + "\r\nnick [nickname] - changes/gives you a nickname on the server for this session"
+                           + "\r\n"
+                           + "\r\nčas - pridobite trenutni čas strežnika"
+                           + "\r\ndir - pridobite delovni direktorij strežnika"
+                           + "\r\ninfo - pridobite sistemske informacije strežnika"
+                           + "\r\npozdravi - naj vas strežnik pozdravi"
+                           + "\r\nšifriraj [ip:vrate/\"vsi\"/ime/\"STREŽNIK\"] [sporočilo]] - pošlji kodirano sporočilo nekomu ali vsem";
                 case "message":
                     if( client is null || !client.Connected )
                         return alert + "Not connected to a server!";
@@ -216,22 +221,113 @@ namespace odjemalec{
 
                     string msg = string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0] ).ToArray() );
                     if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "SERVER" ) || cmd[1].Equals( "all" ) ){
-                        sendMessage( cmd[1], "", "m", msg );
+                        sendMessage( cmd[1], "message", "m", msg );
                         return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
                     }else{
                         string[] tmp = online.Text.Split( '\n' );
                         foreach( string s in tmp ){
                             if( cmd[1].Equals( s.Replace( "\r", "" ) ) ){
-                                sendMessage( cmd[1], "", "m", msg );
+                                sendMessage( cmd[1], "message", "m", msg );
                                 return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
                             }
                         }
                     }
 
                     return alert + "Unable to find: \"" + cmd[1] + "\"!";
+                case "nick":
+                    if( client is null || !client.Connected )
+                        return alert + "Not connected to a server!";
+                    else if( cmd.Length < 2 )
+                        return alert + "Not enough arguments!";
+
+                    string nick = string.Join( "_", cmd.Where(w => w != cmd[0] ).ToArray() );
+                    if( cmd.Length == 2 && checkIfIp( nick ) )
+                        return alert + "You can't set your nickname to an ip!";
+
+                    string[] temp = online.Text.Split( '\n' );
+                    foreach( string s in temp ){
+                        string[] n = s.Split( ' ' );
+
+                        if( n.Length > 1 && n[1].StartsWith( "(" ) && n[1].Substring( 1, n[1].Length - 4 ).Equals( nick ) )
+                            return alert + "\"" + nick + "\" is taken.";
+                    }
+
+                    sendMessage( "SERVER", "nick", "c", nick );
+                    return "";
+                //za nalogu
+                case "čas":
+                    sendMessage( "SERVER", "čas", "c", "" );
+
+                    return info + "Vprašal sem strežnik naj mi pove trenutni čas.";
+                case "dir":
+                    sendMessage( "SERVER", "dir", "c", "" );
+
+                    return info + "Vprašal sem strežnika za delovni direktorij.";
+                case "info":
+                    sendMessage( "SERVER", "info", "c", "" );
+
+                    return info + "Vprašal sem strežnika za sistemske informacije.";
+                case "pozdravi":
+                    sendMessage( "SERVER", "pozdravi", "c", "" );
+
+                    return info + "Prosil sem strežnik, naj me pozdravi.";
+                case "šifriraj":
+                    if( client is null || !client.Connected )
+                        return alert + "Ni povezan s strežnikom!";
+                    else if( cmd.Length < 3 )
+                        return alert + "Ni dovolj argumentov!";
+
+                    string sp = string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0] ).ToArray() );
+                    if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "STREŽNIK" ) || cmd[1].Equals( "vsi" ) ){
+                        sendMessage( cmd[1], "message", "mc", sp );
+                        return info + "Poslano sporočilo: \"" + sp + "\" do \"" + cmd[1] + "\".";
+                    }else{
+                        string[] tmp = online.Text.Split( '\n' );
+                        foreach( string s in tmp ){
+                            if( cmd[1].Equals( s.Replace( "\r", "" ) ) ){
+                                sendMessage( cmd[1], "message", "mc", sp );
+                                return info + "Poslano sporočilo: \"" + sp + "\" do \"" + cmd[1] + "\".";
+                            }
+                        }
+                    }
+
+                    return alert + "Ni mogoče najti: \"" + cmd[1] + "\"!";
                 default:
                     return alert + "Unknown command: \"" + cmd[0] + "\"! Try help to get all commands.";
             }
+        }
+
+        private bool checkIfIp( string sus ){
+            if( sus.Count( d => d == '.' ) != 3 || sus.Count( d => d == ':' ) != 1 )
+                return false;
+
+            string[] check = sus.Split( '.' );
+            for( int i=0; i < check.Length - 1; i++ ){
+                try{
+                    int num = Int32.Parse( check[i] );
+
+                    if( num > 255 || num < 0 )
+                        return false;
+                }
+                catch{
+                    return false;
+                }
+            }
+
+            check = check[check.Length - 1].Split( ':' );
+            try{
+                int num = Int32.Parse( check[0] );
+                if( num > 255 || num < 0 )
+                    return false;
+
+                num= Int32.Parse( check[1] );
+                if( num > 65353 || num < 0 )
+                    return false;
+            }catch{
+                return false;
+            }
+
+            return true;
         }
     }
 }
