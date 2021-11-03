@@ -87,6 +87,8 @@ namespace odjemalec{
 
                     c = info + "You have been disconnected from the SERVER by the SERVER for: \"" + cmd["message"] + "\"!";
                     sc = info + "Disconnected from the server.";
+
+                    setText(online, "");
                     break;
                 case "update online":
                     string[] tmp = cmd["message"].Split( '\n' );
@@ -158,10 +160,15 @@ namespace odjemalec{
 
                     return info + "Connected to \"" + ip + ":" + port + "\".";
                 case "disconnect":
+                    if( client is null || !client.Connected )
+                        return alert + "Not connected to a server!";
+
                     sendMessage( "SERVER", "disconnect", "c", "" );
 
                     client.GetStream().Close();
                     client.Close();
+
+                    setText( online, "" );
 
                     return info + "Disconnected from the server.";
                 case "exit":
@@ -180,12 +187,34 @@ namespace odjemalec{
                            + "\r\ndisconnect - disconnects from a server"
                            + "\r\nexit - quit the program"
                            + "\r\nhelp - displays all commands"
-                           + "\r\nmessage [ip/\"all\"] - send a message to everyone or specific ip";
+                           + "\r\nnick [name] - changes/gives you a nickname on the server for this session"
+                           + "\r\nmessage [ip:port/\"all\"/nickname] - send a message to everyone or specific ip";
+                case "nick":
+                    if( client is null || !client.Connected )
+                        return alert + "Not connected to a server!";
+
+                    if( cmd.Length < 2 )
+                        return alert + "Not enough arguments!";
+
+                    string nick = string.Join( "_", cmd.Where(w => w != cmd[0] ).ToArray() );
+                    string[] temp = online.Text.Split( '\n' );
+                    foreach( string s in temp ){
+                        string[] n = s.Split( ' ' );
+
+                        if( n.Length > 1 && n[1].StartsWith( "(" ) && n[1].Substring( 1, n[1].Length - 2 ).Equals( nick ) )
+                            return alert + "\"" + nick + "\"is taken.";
+                    }
+
+                    sendMessage( "SERVER", "", "n", nick );
+                    return info + "Set your nickname to: \"" + nick + "\".";
                 case "message":
+                    if( client is null || !client.Connected )
+                        return alert + "Not connected to a server!";
+
                     if( cmd.Length < 3 )
                         return alert + "Not enough arguments!";
 
-                    string msg = string.Join(" ", cmd.Where(w => w != cmd[1] && w != cmd[0]).ToArray());
+                    string msg = string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0] ).ToArray() );
                     if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "SERVER" ) || cmd[1].Equals( "all" ) ){
                         sendMessage( cmd[1], "", "m", msg );
                         return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
