@@ -73,7 +73,6 @@ namespace odjemalec{
             }
 
             TripleDESCryptoServiceProvider edes = new TripleDESCryptoServiceProvider();
-            appendText(log, key);
             edes.Key = Bkey;
             edes.Mode = CipherMode.ECB;
             edes.Padding = PaddingMode.PKCS7;
@@ -83,7 +82,6 @@ namespace odjemalec{
             byte[] result = encrypt.TransformFinalBlock( byteTXT, 0 , byteTXT.Length );
 
             edes.Clear();
-
             return Convert.ToBase64String( result, 0, result.Length );
         }
 
@@ -153,6 +151,11 @@ namespace odjemalec{
                     aliases = JsonConvert.DeserializeObject<Dictionary<string, string>>( @cmd["message"] );
 
                     break;
+                //za nalogu
+                case "šifrirano":
+                    appendText( log, "Strežnik mi je vrnil šifrirano sporočilo: \"" + cmd["message"] + "\", pa sem ga dešifriral da vidim če je pravilno šifriral: \"" + decrypt( cmd["message"], cmd["command"] + cmd["type"])  + "\"." );
+
+                    break;
                 default:
                     sendMessage( "SERVER", "message", "m", "\"" + cmd["message"] + "\" wasn't executed succesfully!" );
                     break;
@@ -209,8 +212,8 @@ namespace odjemalec{
                         client = new TcpClient( ip, port );
 
                         Task.Run( async () => receive( client.GetStream() ) );
-                    }catch( Exception e ){
-                        return error + "Somethin went wrong: " + e.Message;
+                    }catch( Exception ex ){
+                        return error + "Somethin went wrong: " + ex.Message;
                     }
 
                     return info + "Connected to \"" + ip + ":" + port + "\".";
@@ -236,7 +239,7 @@ namespace odjemalec{
                     return "";
                 case "help":
                     return info + "Available commands are:"
-                           + "\r\nhelp - shows help"
+                           + "\r\ncmessage [ip:port/\"all\"/nickname/\"SERVER\"] - same as message just encrytped with tdes"
                            + "\r\nconnect [ip:port] - tries to connect to specified ip"
                            + "\r\ndisconnect - disconnects from a server"
                            + "\r\nexit - quit the program"
@@ -247,19 +250,24 @@ namespace odjemalec{
                            + "\r\nčas - pridobite trenutni čas strežnika"
                            + "\r\ndir - pridobite delovni direktorij strežnika"
                            + "\r\ninfo - pridobite sistemske informacije strežnika"
-                           + "\r\npozdravi - naj vas strežnik pozdravi"
-                           + "\r\nšifriraj [ip:vrate/\"vsi\"/ime/\"STREŽNIK\"] [sporočilo]] - pošlji kodirano sporočilo nekomu ali vsem";
+                           + "\r\npozdravi - vprašaj strežnik naj vas pozdravi"
+                           + "\r\nšah [fen] - vprašaj strežnik da ti lepo izpiše fen"
+                           + "\r\nšifriraj [sporočilo] - pošlji sporočilo strežniku, ki ga bo vrnul kodiranega";
+                case "cmessage":
                 case "message":
                     if( client is null || !client.Connected )
                         return alert + "Not connected to a server!";
-
-                    if( cmd.Length < 3 )
+                    else if( cmd.Length < 3 )
                         return alert + "Not enough arguments!";
 
+                    bool e = cmd[0].Equals("cmessage");
                     string msg = string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0] ).ToArray() );
                     if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "SERVER" ) || cmd[1].Equals( "all" ) ){
-                        sendMessage( cmd[1], "message", cmd[1].Equals("all") ? "ma" : "m", msg );
-                        return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
+                        if( e )
+                            sendMessage( cmd[1], "message", cmd[1].Equals("all") ? "mca" : "mc", msg );
+                        else
+                            sendMessage( cmd[1], "message", cmd[1].Equals("all") ? "ma" : "m", msg );
+                        return info + "Sent a" + ( e ? "n encrypted" : "" ) + " message: \"" + msg + "\" to \"" + cmd[1] + "\".";
                     }else{
                         string rec = "";
                         if( aliases.ContainsKey( cmd[1] ) ){
@@ -274,8 +282,8 @@ namespace odjemalec{
                         string[] tmp = online.Text.Split( '\n' );
                         foreach( string s in tmp ){
                             if( s.Replace( "\r", "" ).StartsWith( rec ) ){
-                                sendMessage( rec, "message", "m", msg );
-                                return info + "Sent a message: \"" + msg + "\" do \"" + cmd[1] + "\".";
+                                sendMessage( rec, "message", e ? "mc" : "m", msg );
+                                return info + "Sent a" + ( e ? "n encrypted" : "" ) + " message: \"" + msg + "\" to \"" + cmd[1] + "\".";
                             }
                         }
                     }
@@ -303,52 +311,53 @@ namespace odjemalec{
                     return "";
                 //za nalogu
                 case "čas":
+                    if (client is null || !client.Connected)
+                        return alert + "Ni povezan s strežnikom!";
+
                     sendMessage( "SERVER", "čas", "c", "" );
 
                     return info + "Vprašal sem strežnik naj mi pove trenutni čas.";
                 case "dir":
+                    if (client is null || !client.Connected)
+                        return alert + "Ni povezan s strežnikom!";
+
                     sendMessage( "SERVER", "dir", "c", "" );
 
                     return info + "Vprašal sem strežnika za delovni direktorij.";
                 case "info":
+                    if (client is null || !client.Connected)
+                        return alert + "Ni povezan s strežnikom!";
+
                     sendMessage( "SERVER", "info", "c", "" );
 
                     return info + "Vprašal sem strežnika za sistemske informacije.";
                 case "pozdravi":
+                    if (client is null || !client.Connected)
+                        return alert + "Ni povezan s strežnikom!";
+
                     sendMessage( "SERVER", "pozdravi", "c", "" );
 
                     return info + "Prosil sem strežnik, naj me pozdravi.";
+                case "šah":
+                    if( client is null || !client.Connected )
+                        return alert + "Ni povezan s strežnikom!";
+                    else if( cmd.Length < 7 )
+                        return alert + "Ni dovolj argumentov!";
+
+                    string fen = string.Join( " ", cmd.Where( w => w != cmd[0] ).ToArray() );
+                    sendMessage( "SERVER", "šah", "c", fen );
+
+                    return "Prosil sem strežnik, naj mi lepo izpiše FEN stanje: \"" + fen + "\".";
                 case "šifriraj":
                     if( client is null || !client.Connected )
                         return alert + "Ni povezan s strežnikom!";
-                    else if( cmd.Length < 3 )
+                    else if( cmd.Length < 2 )
                         return alert + "Ni dovolj argumentov!";
 
-                    string sp = string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0] ).ToArray() );
-                    if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "STREŽNIK" ) || cmd[1].Equals( "vsi" ) ){
-                        sendMessage( cmd[1], "message", cmd[1].Equals("vsi") ? "mca" : "mc", sp );
-                        return info + "Poslano šifrirano sporočilo: \"" + sp + "\" do \"" + cmd[1] + "\".";
-                    }else{
-                        string rec = "";
-                        if( aliases.ContainsKey( cmd[1] ) ){
-                            rec = cmd[2];
-                        }
-                        else if( aliases.ContainsValue( cmd[1] ) ){
-                            rec = aliases.First( k => k.Value == cmd[1] ).Key;
-                        }
-                        else
-                            return alert + "Ni mogoče najti: \"" + cmd[1] + "\"!";
-
-                        string[] tmp = online.Text.Split( '\n' );
-                        foreach( string s in tmp ){
-                            if( s.Replace( "\r", "" ).StartsWith( rec ) ){
-                                sendMessage( rec, "message", "mc", sp );
-                                return info + "Poslano šifrirano sporočilo: \"" + sp + "\" do \"" + cmd[1] + "\".";
-                            }
-                        }
-                    }
-
-                    return alert + "Ni mogoče najti: \"" + cmd[1] + "\"!";
+                    string sp = string.Join( " ", cmd.Where( w => w != cmd[0] ).ToArray() );
+                    sendMessage( "SERVER", "šifriraj", "c", sp );
+                    
+                    return info + "Prosil sem strežnik, naj mi šifrira sporočilo: \"" + sp + "\".";
                 default:
                     return alert + "Unknown command: \"" + cmd[0] + "\"! Try help to get all commands.";
             }
