@@ -12,6 +12,7 @@ namespace odjemalec{
     public partial class odjemalec : Form{
         private TcpClient client;
         delegate void SetTextCallback( TextBox type, string text );
+        private Dictionary<string, string> aliases = new Dictionary<string, string>();
 
         private string info = "[INFO]\r\n";
         private string alert = "[ALERT]\r\n";
@@ -39,7 +40,6 @@ namespace odjemalec{
                 byte[] buffer = new byte[1024];
                 string read = "";
 
-
                 try{
                     read = Encoding.UTF8.GetString( buffer, 0, ns.Read( buffer, 0, buffer.Length ) );
                 }catch{}
@@ -53,9 +53,9 @@ namespace odjemalec{
                     else if( msg["type"].Equals( "ma" ) )
                         toLog = "[" + msg["sender"] + "] -> [all]\r\n" + msg["message"];
                     else if( msg["type"].Equals( "mc" ) )
-                        toLog = "[" + msg["sender"] + "]\r\n" + decrypt( msg["message"] );
+                        toLog = "[" + msg["sender"] + "]\r\n" + decrypt( msg["message"], msg["command"] + msg["type"] );
                     else if( msg["type"].Equals( "mca" ) )
-                        toLog = "[" + msg["sender"] + "] -> [all]\r\n" + decrypt( msg["message"] );
+                        toLog = "[" + msg["sender"] + "] -> [all]\r\n" + decrypt( msg["message"], msg["command"] + msg["type"] );
                     else
                         toLog = handleCommand( msg );
 
@@ -65,15 +65,46 @@ namespace odjemalec{
             }
         }
 
-        private string encrypt( string txt ){
-            TripleDESCryptoServiceProvider tdes = new TripleDESCryptoServiceProvider();
-            ICryptoTransform encrypt = tdes.CreateEncryptor();
+        private string encrypt( string txt, string key ){
+            byte[] Bkey = new byte[16];
+            for( int i = 0; i < 16; i += 2 ){
+                byte[] B = BitConverter.GetBytes( key[i % key.Length] );
+                Array.Copy( B, 0, Bkey, i, 2 );
+            }
 
-            return txt;
+            TripleDESCryptoServiceProvider edes = new TripleDESCryptoServiceProvider();
+            appendText(log, key);
+            edes.Key = Bkey;
+            edes.Mode = CipherMode.ECB;
+            edes.Padding = PaddingMode.PKCS7;
+
+            ICryptoTransform encrypt = edes.CreateEncryptor();
+            byte[] byteTXT = UTF8Encoding.UTF8.GetBytes( txt );
+            byte[] result = encrypt.TransformFinalBlock( byteTXT, 0 , byteTXT.Length );
+
+            edes.Clear();
+
+            return Convert.ToBase64String( result, 0, result.Length );
         }
 
-        private string decrypt( string txt ){
-            return txt;
+        private string decrypt( string txt, string key ){
+            byte[] Bkey = new byte[16];
+            for( int i = 0; i < 16; i += 2 ){
+                byte[] B = BitConverter.GetBytes( key[i % key.Length] );
+                Array.Copy( B, 0, Bkey, i, 2 );
+            }
+
+            TripleDESCryptoServiceProvider ddes = new TripleDESCryptoServiceProvider();
+            ddes.Key = Bkey;
+            ddes.Mode = CipherMode.ECB;
+            ddes.Padding = PaddingMode.PKCS7;
+
+            ICryptoTransform decrypt = ddes.CreateDecryptor();
+            byte[] byteTXT = Convert.FromBase64String( txt );
+            byte[] result = decrypt.TransformFinalBlock( byteTXT, 0, byteTXT.Length );
+           
+            ddes.Clear();
+            return Encoding.UTF8.GetString( result, 0, result.Length );
         }
 
         private void sendMessage( string recepient, string cmd, string type, string msg ){
@@ -83,7 +114,7 @@ namespace odjemalec{
                 { "recepient", recepient },
                 { "command", cmd },
                 { "type", type },
-                { "message", type.Equals( "mc" ) ? encrypt( msg ) : msg }
+                { "message", ( type.Equals( "mc" ) || type.Equals( "mca" ) ) ? encrypt( msg, cmd + type ) : msg }
             };
 
             string json = JsonConvert.SerializeObject( forJson );
@@ -104,6 +135,7 @@ namespace odjemalec{
                     c = info + "You have been disconnected from the SERVER by the SERVER for: \"" + cmd["message"] + "\"!";
                     sc = info + "Disconnected from the server.";
 
+                    aliases.Clear();
                     setText(online, "");
                     break;
                 case "update online":
@@ -116,6 +148,10 @@ namespace odjemalec{
                     }
 
                     setText( online, string.Join( "\r\n", tmp ) );
+                    break;
+                case "aliases":
+                    aliases = JsonConvert.DeserializeObject<Dictionary<string, string>>( @cmd["message"] );
+
                     break;
                 default:
                     sendMessage( "SERVER", "message", "m", "\"" + cmd["message"] + "\" wasn't executed succesfully!" );
@@ -186,6 +222,7 @@ namespace odjemalec{
                     client.Close();
 
                     setText( online, "" );
+                    aliases.Clear();
 
                     return info + "Disconnected from the server.";
                 case "exit":
@@ -221,14 +258,24 @@ namespace odjemalec{
 
                     string msg = string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0] ).ToArray() );
                     if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "SERVER" ) || cmd[1].Equals( "all" ) ){
-                        sendMessage( cmd[1], "message", "m", msg );
+                        sendMessage( cmd[1], "message", cmd[1].Equals("all") ? "ma" : "m", msg );
                         return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
                     }else{
+                        string rec = "";
+                        if( aliases.ContainsKey( cmd[1] ) ){
+                            rec = cmd[2];
+                        }
+                        else if( aliases.ContainsValue( cmd[1] ) ){
+                            rec = aliases.First( k => k.Value == cmd[1] ).Key;
+                        }
+                        else
+                            return alert + "Couldn't find nickname/ip: \"" + cmd[1] + "\"!";
+
                         string[] tmp = online.Text.Split( '\n' );
                         foreach( string s in tmp ){
-                            if( cmd[1].Equals( s.Replace( "\r", "" ) ) ){
-                                sendMessage( cmd[1], "message", "m", msg );
-                                return info + "Sent a message: \"" + msg + "\" to \"" + cmd[1] + "\".";
+                            if( s.Replace( "\r", "" ).StartsWith( rec ) ){
+                                sendMessage( rec, "message", "m", msg );
+                                return info + "Sent a message: \"" + msg + "\" do \"" + cmd[1] + "\".";
                             }
                         }
                     }
@@ -279,14 +326,24 @@ namespace odjemalec{
 
                     string sp = string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0] ).ToArray() );
                     if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "STREŽNIK" ) || cmd[1].Equals( "vsi" ) ){
-                        sendMessage( cmd[1], "message", "mc", sp );
-                        return info + "Poslano sporočilo: \"" + sp + "\" do \"" + cmd[1] + "\".";
+                        sendMessage( cmd[1], "message", cmd[1].Equals("vsi") ? "mca" : "mc", sp );
+                        return info + "Poslano šifrirano sporočilo: \"" + sp + "\" do \"" + cmd[1] + "\".";
                     }else{
+                        string rec = "";
+                        if( aliases.ContainsKey( cmd[1] ) ){
+                            rec = cmd[2];
+                        }
+                        else if( aliases.ContainsValue( cmd[1] ) ){
+                            rec = aliases.First( k => k.Value == cmd[1] ).Key;
+                        }
+                        else
+                            return alert + "Ni mogoče najti: \"" + cmd[1] + "\"!";
+
                         string[] tmp = online.Text.Split( '\n' );
                         foreach( string s in tmp ){
-                            if( cmd[1].Equals( s.Replace( "\r", "" ) ) ){
-                                sendMessage( cmd[1], "message", "mc", sp );
-                                return info + "Poslano sporočilo: \"" + sp + "\" do \"" + cmd[1] + "\".";
+                            if( s.Replace( "\r", "" ).StartsWith( rec ) ){
+                                sendMessage( rec, "message", "mc", sp );
+                                return info + "Poslano šifrirano sporočilo: \"" + sp + "\" do \"" + cmd[1] + "\".";
                             }
                         }
                     }
