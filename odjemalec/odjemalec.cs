@@ -11,16 +11,22 @@ using System.Windows.Forms;
 namespace odjemalec{
     public partial class odjemalec : Form{
         private TcpClient client;
-        delegate void SetTextCallback( TextBox type, string text );
-        private Dictionary<string, string> aliases = new Dictionary<string, string>();
+        delegate void SetTextCallback( TextBox type, string text ); //text callback ki se uporablja za invoke funckije
+        private Dictionary<string, string> aliases = new Dictionary<string, string>(); //dictionary ki vsebuje vse vzdevke od uporabnikov
 
+        //besedila ki se uporabljajo za različne vrsti sporočila
         private string info = "[INFO]\r\n";
         private string alert = "[ALERT]\r\n";
 
+        private bool gameOn = false; //bool ki se uporablja da lahko vemo či igra ugibanja gre
+
+        //glavna fukncija katera pokrene cel program
         public odjemalec(){
             InitializeComponent();
         }
 
+        //funkcija ki doda text v textbox ki ga kliče
+        //uporablja se zato ker rabimo invoke zato ker različni thready nemorejo klicat textbox
         private void appendText( TextBox type, string txt ){
             if( type.InvokeRequired )
                 this.Invoke( new SetTextCallback( appendText ), new object[] { type, txt } );
@@ -28,6 +34,8 @@ namespace odjemalec{
                 type.AppendText (txt + ( type.Name.Equals( "log" ) ? "\r\n\r\n" : "\r\n" ) );
         }
 
+        //funkcija ki zamenja text v textbox ki ga kliče
+        //uporablja se zato ker rabimo invoke zato ker različni thready nemorejo klicat textbox
         private void setText( TextBox type, string txt ){
             if (type.InvokeRequired)
                 this.Invoke( new SetTextCallback( setText ), new object[] { type, txt } );
@@ -35,6 +43,7 @@ namespace odjemalec{
                type.Text = txt;
         }
 
+        //funckija ki se kliče kdaj uporabnik prejeme sporočilo od strežnika
         private void receive( NetworkStream ns ){
             while( client.Connected ){
                 byte[] buffer = new byte[1024];
@@ -45,16 +54,12 @@ namespace odjemalec{
                 }catch{}
 
                 if( !string.IsNullOrEmpty( read ) ){
-                    Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read );
+                    Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read ); //sporočilo prejeto od strežnika, ki se šalje kot json, se nazaj da v obliko dictioanry in obdela
 
-                    string toLog = "";
-                    if( msg["type"].Equals( "m" ) )
-                        toLog = "[" + msg["sender"] + "]\r\n" + msg["message"];
-                    else if( msg["type"].Equals( "ma" ) )
-                        toLog = "[" + msg["sender"] + "] -> [all]\r\n" + msg["message"];
-                    else if( msg["type"].Equals( "mc" ) )
+                    string toLog;
+                    if( msg["type"].Equals( "m" )) //tukaj preverimo ali je sporočilo tipa message, message for all, coded message, coded message for all ali ukaz
                         toLog = "[" + msg["sender"] + "]\r\n" + decrypt( msg["message"], msg["command"] + msg["type"] );
-                    else if( msg["type"].Equals( "mca" ) )
+                    else if( msg["type"].Equals( "ma" ) )
                         toLog = "[" + msg["sender"] + "] -> [all]\r\n" + decrypt( msg["message"], msg["command"] + msg["type"] );
                     else
                         toLog = handleCommand( msg );
@@ -65,6 +70,7 @@ namespace odjemalec{
             }
         }
 
+        //funkcija ki šifrira besedilo
         private string encrypt( string txt, string key ){
             byte[] Bkey = new byte[16];
             for( int i = 0; i < 16; i += 2 ){
@@ -85,6 +91,7 @@ namespace odjemalec{
             return Convert.ToBase64String( result, 0, result.Length );
         }
 
+        //funkcija ki dešefrira besedilo
         private string decrypt( string txt, string key ){
             byte[] Bkey = new byte[16];
             for( int i = 0; i < 16; i += 2 ){
@@ -105,28 +112,30 @@ namespace odjemalec{
             return Encoding.UTF8.GetString( result, 0, result.Length );
         }
 
+        //funkcija ki pošlje sporočilo strežniku
         private void sendMessage( string recepient, string cmd, string type, string msg ){
             NetworkStream ns = client.GetStream();
 
+            //sporočilo se da v dictionary zato ker odjemalcu ga šaljemo kot json
             Dictionary<string, string> forJson = new Dictionary<string, string>(){
                 { "recepient", recepient },
                 { "command", cmd },
                 { "type", type },
-                { "message", ( type.Equals( "mc" ) || type.Equals( "mca" ) ) ? encrypt( msg, cmd + type ) : msg }
+                { "message", encrypt( msg, cmd + type ) }
             };
-
             string json = JsonConvert.SerializeObject( forJson );
 
             byte[] send = Encoding.UTF8.GetBytes( json.ToCharArray(), 0, json.Length );
             ns.Write( send, 0, send.Length );
         }
 
+        //funkcija ki obdela sporočila prejeta od strežnika
         private string handleCommand( Dictionary<string, string> cmd ){
             string c = "";
             string sc = "";
 
             switch ( cmd["command"] ){
-                case "disconnect":
+                case "disconnect": //obdelava sporočilo tipa disconnect in nas odklopi od strežnika
                     client.GetStream().Close();
                     client.Close();
 
@@ -136,7 +145,7 @@ namespace odjemalec{
                     aliases.Clear();
                     setText(online, "");
                     break;
-                case "update online":
+                case "update online": //obdelava sporočilo tipa update online in osveži vse odjemalce ki so povezani na strežnika
                     string[] tmp = cmd["message"].Split( '\n' );
                     foreach( string s in tmp ){
                         if( s.Replace( "\r", "" ).StartsWith( client.Client.LocalEndPoint.ToString() ) ){
@@ -147,16 +156,20 @@ namespace odjemalec{
 
                     setText( online, string.Join( "\r\n", tmp ) );
                     break;
-                case "aliases":
+                case "aliases": //obdelava sporočilo tipa aliases in osveži vzdevke vsih povezanih odjemalcov
                     aliases = JsonConvert.DeserializeObject<Dictionary<string, string>>( @cmd["message"] );
 
                     break;
                 //za nalogu
-                case "šifrirano":
+                case "šifrirano": //obdelava sporočilo tipa šifrirano in prikaže šrifrirano in dešifrirano sporočilo
                     appendText( log, "Strežnik mi je vrnil šifrirano sporočilo: \"" + cmd["message"] + "\", pa sem ga dešifriral da vidim če je pravilno šifriral: \"" + decrypt( cmd["message"], cmd["command"] + cmd["type"])  + "\"." );
 
                     break;
-                default:
+                //za nalogu 2
+                case "gameStatus":
+                    gameOn = bool.Parse( cmd["message"] );
+                    break;
+                default: //če ni obdelal sporočila pravilno, to pove strežniku
                     sendMessage( "SERVER", "message", "m", "\"" + cmd["message"] + "\" wasn't executed succesfully!" );
                     break;
             }
@@ -188,7 +201,7 @@ namespace odjemalec{
             string error = "[ERROR]\r\n";
 
             switch( cmd[0] ){
-                case "connect":
+                case "connect": //ukaz z katerim se lahko povežemo do določenog strežnika
                     if( !( client is null ) && client.Connected )
                         return alert + "Already connected to server!";
                     
@@ -217,7 +230,7 @@ namespace odjemalec{
                     }
 
                     return info + "Connected to \"" + ip + ":" + port + "\".";
-                case "disconnect":
+                case "disconnect": //ukaz z katerim se lahko odklopimo od strežnika
                     if( client is null || !client.Connected )
                         return alert + "Not connected to a server!";
 
@@ -228,7 +241,7 @@ namespace odjemalec{
                     aliases.Clear();
 
                     return info + "Disconnected from the server.";
-                case "exit":
+                case "exit": //ukaz kateri zapre porgram
                     Timer cls = new Timer();
                     cls.Tick += delegate{
                         this.Close();
@@ -237,7 +250,7 @@ namespace odjemalec{
                     cls.Start();
 
                     return "";
-                case "help":
+                case "help": //ukaz ki prikaže pomoč
                     return info + "Available commands are:"
                            + "\r\ncmessage [ip:port/\"all\"/nickname/\"SERVER\"] - same as message just encrytped with tdes"
                            + "\r\nconnect [ip:port] - tries to connect to specified ip"
@@ -250,24 +263,23 @@ namespace odjemalec{
                            + "\r\nčas - pridobite trenutni čas strežnika"
                            + "\r\ndir - pridobite delovni direktorij strežnika"
                            + "\r\ninfo - pridobite sistemske informacije strežnika"
+                           + "\r\nponovi - vprašaj strežnik da vampnovi besedilo"
                            + "\r\npozdravi - vprašaj strežnik naj vas pozdravi"
                            + "\r\nšah [fen] - vprašaj strežnik da ti lepo izpiše fen"
-                           + "\r\nšifriraj [sporočilo] - pošlji sporočilo strežniku, ki ga bo vrnul kodiranega";
-                case "cmessage":
-                case "message":
+                           + "\r\nšifriraj [sporočilo] - pošlji sporočilo strežniku, ki ga bo vrnul kodiranega"
+                           + "\r\n"
+                           + "\r\nstartGame - začni igro ugibanja besed"
+                           + "\r\nstoptGame - zaustavi igro ugibanja besed";
+                case "message": //ukaz ki pošlje šifrirano ali navadno sporočilo
                     if( client is null || !client.Connected )
                         return alert + "Not connected to a server!";
                     else if( cmd.Length < 3 )
                         return alert + "Not enough arguments!";
 
-                    bool e = cmd[0].Equals("cmessage");
                     string msg = string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0] ).ToArray() );
                     if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "SERVER" ) || cmd[1].Equals( "all" ) ){
-                        if( e )
-                            sendMessage( cmd[1], "message", cmd[1].Equals("all") ? "mca" : "mc", msg );
-                        else
-                            sendMessage( cmd[1], "message", cmd[1].Equals("all") ? "ma" : "m", msg );
-                        return info + "Sent a" + ( e ? "n encrypted" : "" ) + " message: \"" + msg + "\" to \"" + cmd[1] + "\".";
+                        sendMessage( cmd[1], "message", cmd[1].Equals("all") ? "ma" : "m", msg );
+                        return info + "Sent a" + " message: \"" + msg + "\" to \"" + cmd[1] + "\".";
                     }else{
                         string rec = "";
                         if( aliases.ContainsKey( cmd[1] ) ){
@@ -282,14 +294,14 @@ namespace odjemalec{
                         string[] tmp = online.Text.Split( '\n' );
                         foreach( string s in tmp ){
                             if( s.Replace( "\r", "" ).StartsWith( rec ) ){
-                                sendMessage( rec, "message", e ? "mc" : "m", msg );
-                                return info + "Sent a" + ( e ? "n encrypted" : "" ) + " message: \"" + msg + "\" to \"" + cmd[1] + "\".";
+                                sendMessage( rec, "message", "m", msg );
+                                return info + "Sent a" + " message: \"" + msg + "\" to \"" + cmd[1] + "\".";
                             }
                         }
                     }
 
                     return alert + "Unable to find: \"" + cmd[1] + "\"!";
-                case "nick":
+                case "nick": //ukaz z katerim si lahko spremenimo vzdevek
                     if( client is null || !client.Connected )
                         return alert + "Not connected to a server!";
                     else if( cmd.Length < 2 )
@@ -310,35 +322,44 @@ namespace odjemalec{
                     sendMessage( "SERVER", "nick", "c", nick );
                     return "";
                 //za nalogu
-                case "čas":
+                case "čas": //ukaz z katerim vprašamo strežnika da name pove točen čas
                     if (client is null || !client.Connected)
                         return alert + "Ni povezan s strežnikom!";
 
                     sendMessage( "SERVER", "čas", "c", "" );
 
                     return info + "Vprašal sem strežnik naj mi pove trenutni čas.";
-                case "dir":
+                case "dir": //ukaz z katerim vprašamo da name pove delovni direktorij
                     if (client is null || !client.Connected)
                         return alert + "Ni povezan s strežnikom!";
 
                     sendMessage( "SERVER", "dir", "c", "" );
 
                     return info + "Vprašal sem strežnika za delovni direktorij.";
-                case "info":
+                case "info": //ukaz z katerim vprašamo strežnik da nam pove sistemske informacije
                     if (client is null || !client.Connected)
                         return alert + "Ni povezan s strežnikom!";
 
                     sendMessage( "SERVER", "info", "c", "" );
 
                     return info + "Vprašal sem strežnika za sistemske informacije.";
-                case "pozdravi":
-                    if (client is null || !client.Connected)
+                case "ponovi": //ukaz z katerim vprašamo strežnika da nam ponovi sporočilo
+                    if( client is null || !client.Connected )
+                        return alert + "Ni povezan s strežnikom!";
+                    else if( cmd.Length < 2 )
+                        return alert + "Ni dovolj argumentov!";
+
+                    sendMessage( "SERVER", "ponovi", "c", string.Join( " ", cmd.Where( w => w != cmd[0] ).ToArray() ) );
+
+                    return info + "Vprašal sem strežnika da mi ponovi besedilo.";
+                case "pozdravi": //ukaz z katerim vprašamo strežnika da nas pozdravi
+                    if( client is null || !client.Connected )
                         return alert + "Ni povezan s strežnikom!";
 
                     sendMessage( "SERVER", "pozdravi", "c", "" );
 
                     return info + "Prosil sem strežnik, naj me pozdravi.";
-                case "šah":
+                case "šah": //ukaz z katerim vprašamo strežnika da nam lepo izpiše fen notaciju
                     if( client is null || !client.Connected )
                         return alert + "Ni povezan s strežnikom!";
                     else if( cmd.Length < 7 )
@@ -348,7 +369,7 @@ namespace odjemalec{
                     sendMessage( "SERVER", "šah", "c", fen );
 
                     return "Prosil sem strežnik, naj mi lepo izpiše FEN stanje: \"" + fen + "\".";
-                case "šifriraj":
+                case "šifriraj": //ukaz z katerim vprašamo strežnika da nam šifrira sporočilo
                     if( client is null || !client.Connected )
                         return alert + "Ni povezan s strežnikom!";
                     else if( cmd.Length < 2 )
@@ -358,11 +379,29 @@ namespace odjemalec{
                     sendMessage( "SERVER", "šifriraj", "c", sp );
                     
                     return info + "Prosil sem strežnik, naj mi šifrira sporočilo: \"" + sp + "\".";
+                //za drugo nalogu
+                case "startGame": //ukaz z katerim začnemo igro ugibanja besed
+                case "stopGame": //ukaz z katerim končamo igro ugibanja besed
+                    if (client is null || !client.Connected)
+                        return alert + "Ni povezan s strežnikom!";
+                    else if ( ( gameOn && cmd[0].Equals( "stopGame" ) ) || ( !gameOn && cmd[0].Equals( "startGame" ) ) ){
+                        sendMessage( "SERVER", cmd[0], "c", "" );
+                        return "";
+                    }
+
+                    return alert + ( cmd[0].Equals("stopGame") ? "Igra ne poteka!" : "Igra že poteka!" );
                 default:
-                    return alert + "Unknown command: \"" + cmd[0] + "\"! Try help to get all commands.";
+                    if( gameOn ){
+                        sendMessage( "SERVER", "zadeni", "c", cmd[0] ); //pošlje strežniku besedilo za uganiti
+
+                        return "";
+                    }
+                    else
+                        return alert + "Unknown command: \"" + cmd[0] + "\"! Try help to get all commands.";
             }
         }
 
+        //funkcija ki preveri ali je besedilo valjaven ip
         private bool checkIfIp( string sus ){
             if( sus.Count( d => d == '.' ) != 3 || sus.Count( d => d == ':' ) != 1 )
                 return false;
