@@ -15,10 +15,10 @@
             this.chat = new System.Windows.Forms.TextBox();
             this.log = new System.Windows.Forms.TextBox();
             this.horizontal_split = new System.Windows.Forms.SplitContainer();
+            this.online_lab = new System.Windows.Forms.Label();
+            this.online = new System.Windows.Forms.TextBox();
             this.vertical_split_right = new System.Windows.Forms.SplitContainer();
             this.log_label = new System.Windows.Forms.Label();
-            this.online = new System.Windows.Forms.TextBox();
-            this.online_lab = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.horizontal_split)).BeginInit();
             this.horizontal_split.Panel1.SuspendLayout();
             this.horizontal_split.Panel2.SuspendLayout();
@@ -36,7 +36,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.chat.Location = new System.Drawing.Point(3, 5);
             this.chat.Name = "chat";
-            this.chat.Size = new System.Drawing.Size(624, 20);
+            this.chat.Size = new System.Drawing.Size(624, 22);
             this.chat.TabIndex = 0;
             this.chat.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.chat_KeyPress);
             // 
@@ -81,6 +81,32 @@
             this.horizontal_split.SplitterWidth = 2;
             this.horizontal_split.TabIndex = 4;
             // 
+            // online_lab
+            // 
+            this.online_lab.AutoSize = true;
+            this.online_lab.Location = new System.Drawing.Point(3, 0);
+            this.online_lab.Name = "online_lab";
+            this.online_lab.Size = new System.Drawing.Size(59, 17);
+            this.online_lab.TabIndex = 4;
+            this.online_lab.Text = "ONLINE";
+            // 
+            // online
+            // 
+            this.online.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.online.Font = new System.Drawing.Font("Courier New", 10.8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(238)));
+            this.online.HideSelection = false;
+            this.online.Location = new System.Drawing.Point(3, 3);
+            this.online.Multiline = true;
+            this.online.Name = "online";
+            this.online.ReadOnly = true;
+            this.online.ScrollBars = System.Windows.Forms.ScrollBars.Both;
+            this.online.Size = new System.Drawing.Size(344, 689);
+            this.online.TabIndex = 3;
+            this.online.TabStop = false;
+            this.online.TextAlign = System.Windows.Forms.HorizontalAlignment.Right;
+            // 
             // vertical_split_right
             // 
             this.vertical_split_right.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -101,41 +127,16 @@
             this.vertical_split_right.Size = new System.Drawing.Size(630, 697);
             this.vertical_split_right.SplitterDistance = 663;
             this.vertical_split_right.TabIndex = 0;
+            this.vertical_split_right.TabStop = false;
             // 
             // log_label
             // 
             this.log_label.AutoSize = true;
             this.log_label.Location = new System.Drawing.Point(3, 3);
             this.log_label.Name = "log_label";
-            this.log_label.Size = new System.Drawing.Size(29, 13);
+            this.log_label.Size = new System.Drawing.Size(38, 17);
             this.log_label.TabIndex = 2;
             this.log_label.Text = "LOG";
-            // 
-            // online
-            // 
-            this.online.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.online.Font = new System.Drawing.Font("Courier New", 10.8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(238)));
-            this.online.HideSelection = false;
-            this.online.Location = new System.Drawing.Point(3, 3);
-            this.online.Multiline = true;
-            this.online.Name = "online";
-            this.online.ReadOnly = true;
-            this.online.ScrollBars = System.Windows.Forms.ScrollBars.Both;
-            this.online.Size = new System.Drawing.Size(344, 689);
-            this.online.TabIndex = 3;
-            this.online.TabStop = false;
-            this.online.TextAlign = System.Windows.Forms.HorizontalAlignment.Right;
-            // 
-            // online_lab
-            // 
-            this.online_lab.AutoSize = true;
-            this.online_lab.Location = new System.Drawing.Point(3, 0);
-            this.online_lab.Name = "online_lab";
-            this.online_lab.Size = new System.Drawing.Size(47, 13);
-            this.online_lab.TabIndex = 4;
-            this.online_lab.Text = "ONLINE";
             // 
             // odjemalec
             // 

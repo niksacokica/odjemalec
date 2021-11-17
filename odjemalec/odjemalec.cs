@@ -17,6 +17,7 @@ namespace odjemalec{
         //besedila ki se uporabljajo za različne vrsti sporočila
         private string info = "[INFO]\r\n";
         private string alert = "[ALERT]\r\n";
+        private string error = "[ERROR]\r\n";
 
         private bool gameOn = false; //bool ki se uporablja da lahko vemo či igra ugibanja gre
 
@@ -51,16 +52,22 @@ namespace odjemalec{
 
                 try{
                     read = Encoding.UTF8.GetString( buffer, 0, ns.Read( buffer, 0, buffer.Length ) );
-                }catch{}
+                }catch{
+                    appendText( log, error + "Couldn't read message!" );
+                }
 
                 if( !string.IsNullOrEmpty( read ) ){
                     Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read ); //sporočilo prejeto od strežnika, ki se šalje kot json, se nazaj da v obliko dictioanry in obdela
+                    msg["message"] = decrypt( msg["message"], msg["command"] + msg["type"] + client.Client.RemoteEndPoint.ToString() );
+
+                    appendText( log, read );
+                    appendText( log, msg["message"] );
 
                     string toLog;
-                    if( msg["type"].Equals( "m" )) //tukaj preverimo ali je sporočilo tipa message, message for all, coded message, coded message for all ali ukaz
-                        toLog = "[" + msg["sender"] + "]\r\n" + decrypt( msg["message"], msg["command"] + msg["type"] );
+                    if( msg["type"].Equals( "m" )) //tukaj preverimo ali je sporočilo tipa message, message for all ali ukaz
+                        toLog = "[" + msg["sender"] + "]\r\n" + msg["message"];
                     else if( msg["type"].Equals( "ma" ) )
-                        toLog = "[" + msg["sender"] + "] -> [all]\r\n" + decrypt( msg["message"], msg["command"] + msg["type"] );
+                        toLog = "[" + msg["sender"] + "] -> [all]\r\n" + msg["message"];
                     else
                         toLog = handleCommand( msg );
 
@@ -78,10 +85,11 @@ namespace odjemalec{
                 Array.Copy( B, 0, Bkey, i, 2 );
             }
 
-            TripleDESCryptoServiceProvider edes = new TripleDESCryptoServiceProvider();
-            edes.Key = Bkey;
-            edes.Mode = CipherMode.ECB;
-            edes.Padding = PaddingMode.PKCS7;
+            TripleDESCryptoServiceProvider edes = new TripleDESCryptoServiceProvider{
+                Key = Bkey,
+                Mode = CipherMode.ECB,
+                Padding = PaddingMode.PKCS7
+            };
 
             ICryptoTransform encrypt = edes.CreateEncryptor();
             byte[] byteTXT = UTF8Encoding.UTF8.GetBytes( txt );
@@ -99,10 +107,11 @@ namespace odjemalec{
                 Array.Copy( B, 0, Bkey, i, 2 );
             }
 
-            TripleDESCryptoServiceProvider ddes = new TripleDESCryptoServiceProvider();
-            ddes.Key = Bkey;
-            ddes.Mode = CipherMode.ECB;
-            ddes.Padding = PaddingMode.PKCS7;
+            TripleDESCryptoServiceProvider ddes = new TripleDESCryptoServiceProvider{
+                Key = Bkey,
+                Mode = CipherMode.ECB,
+                Padding = PaddingMode.PKCS7
+            };
 
             ICryptoTransform decrypt = ddes.CreateDecryptor();
             byte[] byteTXT = Convert.FromBase64String( txt );
@@ -121,7 +130,7 @@ namespace odjemalec{
                 { "recepient", recepient },
                 { "command", cmd },
                 { "type", type },
-                { "message", encrypt( msg, cmd + type ) }
+                { "message", encrypt( msg, cmd + type + client.Client.RemoteEndPoint.ToString() ) }
             };
             string json = JsonConvert.SerializeObject( forJson );
 
@@ -198,7 +207,6 @@ namespace odjemalec{
         //tukaj se preveri ali je uporabnik vnesel pravilen ukaz, in či je nekaj z njim naredimo
         private string handleInput( string txt ){
             string[] cmd = txt.Split( ' ' );
-            string error = "[ERROR]\r\n";
 
             switch( cmd[0] ){
                 case "connect": //ukaz z katerim se lahko povežemo do določenog strežnika
@@ -278,7 +286,7 @@ namespace odjemalec{
 
                     string msg = string.Join( " ", cmd.Where( w => w != cmd[1] && w != cmd[0] ).ToArray() );
                     if( client.Client.RemoteEndPoint.ToString().Equals( cmd[1] ) || cmd[1].Equals( "SERVER" ) || cmd[1].Equals( "all" ) ){
-                        sendMessage( cmd[1], "message", cmd[1].Equals("all") ? "ma" : "m", msg );
+                        sendMessage( cmd[1], "msg", cmd[1].Equals("all") ? "ma" : "m", msg );
                         return info + "Sent a" + " message: \"" + msg + "\" to \"" + cmd[1] + "\".";
                     }else{
                         string rec = "";
@@ -294,7 +302,7 @@ namespace odjemalec{
                         string[] tmp = online.Text.Split( '\n' );
                         foreach( string s in tmp ){
                             if( s.Replace( "\r", "" ).StartsWith( rec ) ){
-                                sendMessage( rec, "message", "m", msg );
+                                sendMessage( rec, "msg", "m", msg );
                                 return info + "Sent a" + " message: \"" + msg + "\" to \"" + cmd[1] + "\".";
                             }
                         }
