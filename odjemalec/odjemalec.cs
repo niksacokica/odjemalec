@@ -24,6 +24,20 @@ namespace odjemalec{
         //glavna fukncija katera pokrene cel program
         public odjemalec(){
             InitializeComponent();
+
+            //timer ki vsako sekundo preveri ali se je slučajno strežnik odpspojil na način da ni poslal sporočila da se je odspojil (interneta je zmanjkalo,...)
+            Timer cc = new Timer();
+            cc.Tick += delegate {
+                if( client is null || !client.Connected ){
+                    setText( online, "" );
+                    aliases.Clear();
+
+                    appendText( log, info + "Disconnected from the server." );
+                }
+
+            };
+            cc.Interval = 1000;
+            cc.Start();
         }
 
         //funkcija ki doda text v textbox ki ga kliče
@@ -56,24 +70,23 @@ namespace odjemalec{
                     appendText( log, error + "Couldn't read message!" );
                 }
 
-                if( !string.IsNullOrEmpty( read ) ){
-                    Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read ); //sporočilo prejeto od strežnika, ki se šalje kot json, se nazaj da v obliko dictioanry in obdela
-                    msg["message"] = decrypt( msg["message"], msg["command"] + msg["type"] + client.Client.RemoteEndPoint.ToString() );
+                Task.Run( async () => { //prejeto sporočilo obdelamo v novem threadu da lahko naenkrat sprejememo več sporočil
+                    if( !string.IsNullOrEmpty( read ) ){
+                        Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read ); //sporočilo prejeto od strežnika, ki se šalje kot json, se nazaj da v obliko dictioanry in obdela
+                        msg["message"] = decrypt( msg["message"], msg["command"] + msg["type"] + client.Client.RemoteEndPoint.ToString() );
 
-                    appendText( log, read );
-                    appendText( log, msg["message"] );
+                        string toLog;
+                        if( msg["type"].Equals( "m" )) //tukaj preverimo ali je sporočilo tipa message, message for all ali ukaz
+                            toLog = "[" + msg["sender"] + "]\r\n" + msg["message"];
+                        else if( msg["type"].Equals( "ma" ) )
+                            toLog = "[" + msg["sender"] + "] -> [all]\r\n" + msg["message"];
+                        else
+                            toLog = handleCommand( msg );
 
-                    string toLog;
-                    if( msg["type"].Equals( "m" )) //tukaj preverimo ali je sporočilo tipa message, message for all ali ukaz
-                        toLog = "[" + msg["sender"] + "]\r\n" + msg["message"];
-                    else if( msg["type"].Equals( "ma" ) )
-                        toLog = "[" + msg["sender"] + "] -> [all]\r\n" + msg["message"];
-                    else
-                        toLog = handleCommand( msg );
-
-                    if( !string.IsNullOrEmpty( toLog ) )
-                        appendText( log, toLog );
-                }
+                        if( !string.IsNullOrEmpty( toLog ) )
+                            appendText( log, toLog );
+                    }
+                });
             }
         }
 

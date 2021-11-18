@@ -35,6 +35,7 @@
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.chat.Location = new System.Drawing.Point(3, 5);
+            this.chat.MaxLength = 950;
             this.chat.Name = "chat";
             this.chat.Size = new System.Drawing.Size(624, 22);
             this.chat.TabIndex = 0;
