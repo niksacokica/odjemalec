@@ -21,6 +21,8 @@ namespace odjemalec{
 
         private bool gameOn = false; //bool ki se uporablja da lahko vemo či igra ugibanja gre
 
+        private bool con = false;
+
         //glavna fukncija katera pokrene cel program
         public odjemalec(){
             InitializeComponent();
@@ -28,11 +30,12 @@ namespace odjemalec{
             //timer ki vsako sekundo preveri ali se je slučajno strežnik odpspojil na način da ni poslal sporočila da se je odspojil (interneta je zmanjkalo,...)
             Timer cc = new Timer();
             cc.Tick += delegate {
-                if( client is null || !client.Connected ){
+                if( con && ( client is null || !client.Connected ) ){
                     setText( online, "" );
                     aliases.Clear();
 
-                    appendText( log, info + "Disconnected from the server." );
+                    appendText( log, info + "Server went offline." );
+                    con = !con;
                 }
 
             };
@@ -66,27 +69,30 @@ namespace odjemalec{
 
                 try{
                     read = Encoding.UTF8.GetString( buffer, 0, ns.Read( buffer, 0, buffer.Length ) );
+
+                    Task.Run( () => { //prejeto sporočilo obdelamo v novem threadu da lahko naenkrat sprejememo več sporočil
+                        if( !string.IsNullOrEmpty( read ) ){
+                            appendText(log, read + "\r\n");
+
+                            Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read ); //sporočilo prejeto od strežnika, ki se šalje kot json, se nazaj da v obliko dictioanry in obdela
+                            msg["message"] = decrypt( msg["message"], msg["command"] + msg["type"] + client.Client.RemoteEndPoint.ToString() );
+
+                            string toLog;
+                            if( msg["type"].Equals( "m" )) //tukaj preverimo ali je sporočilo tipa message, message for all ali ukaz
+                                toLog = "[" + msg["sender"] + "]" + ( aliases.ContainsKey( msg["sender"] ) && !string.IsNullOrEmpty( aliases[msg["sender"]] ) ? " (" + aliases[msg["sender"]] + ")\r\n" : "\r\n") + msg["message"];
+                            else if( msg["type"].Equals( "ma" ) )
+                                toLog = "[" + msg["sender"] + "]" + ( aliases.ContainsKey( msg["sender"] ) && !string.IsNullOrEmpty( aliases[msg["sender"]] ) ? " (" + aliases[msg["sender"]] + ")" : "") + " -> [all]\r\n" + msg["message"];
+                            else
+                                toLog = handleCommand( msg );
+
+                            if( !string.IsNullOrEmpty( toLog ) )
+                                appendText( log, toLog );
+                        }
+                    });
                 }catch{
-                    appendText( log, error + "Couldn't read message!" );
+                    if( client.Connected )
+                        appendText( log, error + "Couldn't read message!" );
                 }
-
-                Task.Run( async () => { //prejeto sporočilo obdelamo v novem threadu da lahko naenkrat sprejememo več sporočil
-                    if( !string.IsNullOrEmpty( read ) ){
-                        Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read ); //sporočilo prejeto od strežnika, ki se šalje kot json, se nazaj da v obliko dictioanry in obdela
-                        msg["message"] = decrypt( msg["message"], msg["command"] + msg["type"] + client.Client.RemoteEndPoint.ToString() );
-
-                        string toLog;
-                        if( msg["type"].Equals( "m" )) //tukaj preverimo ali je sporočilo tipa message, message for all ali ukaz
-                            toLog = "[" + msg["sender"] + "]\r\n" + msg["message"];
-                        else if( msg["type"].Equals( "ma" ) )
-                            toLog = "[" + msg["sender"] + "] -> [all]\r\n" + msg["message"];
-                        else
-                            toLog = handleCommand( msg );
-
-                        if( !string.IsNullOrEmpty( toLog ) )
-                            appendText( log, toLog );
-                    }
-                });
             }
         }
 
@@ -245,11 +251,12 @@ namespace odjemalec{
                     try{
                         client = new TcpClient( ip, port );
 
-                        Task.Run( async () => receive( client.GetStream() ) );
+                        Task.Run( () => receive( client.GetStream() ) );
                     }catch( Exception ex ){
                         return error + "Somethin went wrong: " + ex.Message;
                     }
 
+                    con = !con;
                     return info + "Connected to \"" + ip + ":" + port + "\".";
                 case "disconnect": //ukaz z katerim se lahko odklopimo od strežnika
                     if( client is null || !client.Connected )
