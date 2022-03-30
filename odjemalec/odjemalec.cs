@@ -72,8 +72,6 @@ namespace odjemalec{
 
                     Task.Run( () => { //prejeto sporočilo obdelamo v novem threadu da lahko naenkrat sprejememo več sporočil
                         if( !string.IsNullOrEmpty( read ) ){
-                            appendText(log, read + "\r\n");
-
                             Dictionary<string, string> msg = JsonConvert.DeserializeObject<Dictionary<string, string>>( @read ); //sporočilo prejeto od strežnika, ki se šalje kot json, se nazaj da v obliko dictioanry in obdela
                             msg["message"] = decrypt( msg["message"], msg["command"] + msg["type"] + client.Client.RemoteEndPoint.ToString() );
 
@@ -280,7 +278,6 @@ namespace odjemalec{
                     return "";
                 case "help": //ukaz ki prikaže pomoč
                     return info + "Available commands are:"
-                           + "\r\ncmessage [ip:port/\"all\"/nickname/\"SERVER\"] - same as message just encrytped with tdes"
                            + "\r\nconnect [ip:port] - tries to connect to specified ip"
                            + "\r\ndisconnect - disconnects from a server"
                            + "\r\nexit - quit the program"
@@ -335,7 +332,7 @@ namespace odjemalec{
                     else if( cmd.Length < 2 )
                         return alert + "Not enough arguments!";
 
-                    string nick = string.Join( "_", cmd.Where(w => w != cmd[0] ).ToArray() );
+                    string nick = string.Join( "_", cmd.Where( w => w != cmd[0] ).ToArray() );
                     if( cmd.Length == 2 && checkIfIp( nick ) )
                         return alert + "You can't set your nickname to an ip!";
 
